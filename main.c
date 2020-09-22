@@ -81,6 +81,10 @@ void command_end_action(list **head, list **tail, int *size, int *capacity, int 
     *head = *tail = NULL;
 }
 
+void print_prompt() {
+    printf(">>");
+}
+
 int main() {
     int symbol;
     int quote_flag = 0;
@@ -92,9 +96,11 @@ int main() {
 
     mutate_to_default(&size, &capacity, &quote_flag, &new_word_flag);
 
+    print_prompt();
     while ((symbol = getchar()) != EOF) {
         if (symbol == '\n') {
             command_end_action(&head, &tail, &size, &capacity, &quote_flag, &new_word_flag);
+	    print_prompt();
         } else if (symbol == ' ' && !quote_flag) {
             if (size == 0) continue;
             mutate_to_default(&size, &capacity, &quote_flag, &new_word_flag);
@@ -111,6 +117,6 @@ int main() {
         }
     }
     command_end_action(&head, &tail, &size, &capacity, &quote_flag, &new_word_flag);
-    
+    printf("\n"); 
     return 0;
 }
