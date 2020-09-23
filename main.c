@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 enum {
     DEFAULT_STRING_CAP = 32
 };
@@ -11,12 +10,26 @@ typedef struct list {
     struct list *next;
 } list;
 
+typedef struct sized_string {
+    char *str;
+    int size;
+    int capacity;
+} sized_string;
+
 char *reallocate_str(char *str, int size, int *capacity) {
     if (size + 1 == *capacity) {
         *capacity *= 2;
         str = realloc(str, *capacity);
     }
     return str;
+}
+
+sized_string *update_str_cap(sized_string *sstr) {
+    if (sstr->size + 1 == sstr->capacity) {
+        sstr->capacity *= 2;
+        sstr->str = realloc(sstr->str, sstr->capacity);
+    }
+    return sstr;
 }
 
 list *list_init() {
@@ -28,8 +41,6 @@ list *list_init() {
 
 void list_print(const list *head) {
     if (head == NULL) return;
-
-    if (head->word == NULL) exit(69);
     printf("%s\n", head->word);
     list_print(head->next);
 }
@@ -42,15 +53,15 @@ void list_free(list *head) {
     list_free(next);
 }
 
-list *list_insert_symbol(list *tail, char symbol, int *size, int *capacity) {
-    if (tail->word == NULL) { /* word is not initiated */
-        tail->word = malloc(DEFAULT_STRING_CAP);
+char *update_str(char *str, char symbol, int *size, int *capacity) {
+    if (str == NULL) { /* word is not initiated */
+        str = malloc(*capacity);
+        *size = 0;
     }
-    tail->word = reallocate_str(tail->word, *size, capacity);
-
-    tail->word[(*size)++] = symbol;
-    tail->word[(*size)] = '\0';
-    return tail;
+    str = reallocate_str(str, *size, capacity);
+    str[(*size)++] = symbol;
+    str[(*size)] = '\0';
+    return str;
 }
 
 list *list_insert(list *tail) {
@@ -62,61 +73,63 @@ list *list_insert(list *tail) {
     return child;
 }
 
-
-void mutate_to_default(int *size, int *cap, int *quote_flag, int *new_word_flag) {
-    (*size) = 0;
-    (*cap) = DEFAULT_STRING_CAP;
-    (*quote_flag) = 0;
-    (*new_word_flag) = 1;
-}
-
-void command_end_action(list **head, list **tail, int *size, int *capacity, int *quote_flag, int *new_word_flag) {
-    if (*quote_flag)
-        printf("Error: unclosed '\"'.\n");
-    else {
-        list_print(*head);
+char *scan_command() {
+    int symbol;
+    int size = 0;
+    int capacity = DEFAULT_STRING_CAP;
+    char *command_str = NULL;
+    while ((symbol = getchar()) != EOF) {
+        if (symbol == '\n') {
+            return command_str; 
+        } 
+        command_str = update_str(command_str, symbol, &size, &capacity); 
     }
-    list_free(*head);
-    mutate_to_default(size, capacity, quote_flag, new_word_flag);
-    *head = *tail = NULL;
+    return command_str;
 }
 
-void print_prompt() {
-    printf(">>");
+list *parse_command(const char *command) {
+    if (command == NULL) {
+        return NULL;
+    }
+    list *head = NULL; 
+    list *tail = NULL;
+    int word_size = 0;
+    int word_cap = DEFAULT_STRING_CAP;
+    int quote_flag = 0;
+    int i;
+    for (i = 0; command[i] != '\0'; i++) {
+        if (command[i] == ' ' && !quote_flag) {
+            if (word_size == 0) {
+                continue;
+            }
+            tail = list_insert(tail);
+            quote_flag = 0;
+            word_size = 0;
+            word_cap = DEFAULT_STRING_CAP;
+        } else {
+            if (command[i] == '"') quote_flag = !quote_flag;
+            if (head == NULL) {
+                tail = list_init();
+                head = tail;
+            }
+            tail->word = update_str(tail->word, command[i], &word_size, &word_cap);
+        }
+    }
+    if (quote_flag) {
+        fprintf(stderr, "Error - unbalanced quotes\n");
+        list_free(head);
+        return NULL;
+    }
+    return head;
 }
 
 int main() {
-    int symbol;
-    int quote_flag = 0;
-    int new_word_flag = 1;
-    int size, capacity;
-
-    list *head = NULL;
-    list *tail = NULL;
-
-    mutate_to_default(&size, &capacity, &quote_flag, &new_word_flag);
-
-    print_prompt();
-    while ((symbol = getchar()) != EOF) {
-        if (symbol == '\n') {
-            command_end_action(&head, &tail, &size, &capacity, &quote_flag, &new_word_flag);
-	    print_prompt();
-        } else if (symbol == ' ' && !quote_flag) {
-            if (size == 0) continue;
-            mutate_to_default(&size, &capacity, &quote_flag, &new_word_flag);
-        } else {
-            if (new_word_flag) {
-                new_word_flag = 0;
-                tail = list_insert(tail);
-            }
-            if (symbol == '"') quote_flag = !quote_flag;
-            tail = list_insert_symbol(tail, (char) symbol, &size, &capacity);
-            if (head == NULL) { /* first word in the command is here*/
-                head = tail;
-            }
-        }
-    }
-    command_end_action(&head, &tail, &size, &capacity, &quote_flag, &new_word_flag);
-    printf("\n"); 
+    while (!feof(stdin)) {
+        printf(">>");
+        list *command = parse_command(scan_command());
+        list_print(command);
+        list_free(command);
+    } 
+    puts("\n----------------");
     return 0;
 }
