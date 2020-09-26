@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 enum {
     DEFAULT_STRING_CAP = 32
@@ -97,8 +98,11 @@ list *parse_command(const char *command) {
     int word_cap = DEFAULT_STRING_CAP;
     int quote_flag = 0;
     int i;
+    printf("whole command: %s\n", command);
+    printf("command size: %d\n", strlen(command));
     for (i = 0; command[i] != '\0'; i++) {
         if (command[i] == ' ' && !quote_flag) {
+            printf("%d\n", command[i]);
             if (word_size == 0) {
                 continue;
             }
@@ -127,7 +131,9 @@ int main() {
     while (!feof(stdin)) {
         printf(">>");
         list *command = parse_command(scan_command());
+        printf("command parsed\n");
         list_print(command);
+        printf("command printed\n");
         list_free(command);
     } 
     puts("\n----------------");
