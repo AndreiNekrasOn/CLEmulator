@@ -42,6 +42,7 @@ list *list_init() {
 
 void list_print(const list *head) {
     if (head == NULL) return;
+    if (head->word == NULL) exit(69); /* debug */
     printf("%s\n", head->word);
     list_print(head->next);
 }
@@ -97,23 +98,24 @@ list *parse_command(const char *command) {
     int word_size = 0;
     int word_cap = DEFAULT_STRING_CAP;
     int quote_flag = 0;
+    int new_word_flag = 1;
     int i;
-    printf("whole command: %s\n", command);
-    printf("command size: %d\n", strlen(command));
     for (i = 0; command[i] != '\0'; i++) {
         if (command[i] == ' ' && !quote_flag) {
-            printf("%d\n", command[i]);
             if (word_size == 0) {
                 continue;
             }
-            tail = list_insert(tail);
+            new_word_flag = 1;
             quote_flag = 0;
             word_size = 0;
             word_cap = DEFAULT_STRING_CAP;
         } else {
             if (command[i] == '"') quote_flag = !quote_flag;
+            if (new_word_flag) {
+                tail = list_insert(tail);
+                new_word_flag = 0;
+            }
             if (head == NULL) {
-                tail = list_init();
                 head = tail;
             }
             tail->word = update_str(tail->word, command[i], &word_size, &word_cap);
@@ -131,9 +133,7 @@ int main() {
     while (!feof(stdin)) {
         printf(">>");
         list *command = parse_command(scan_command());
-        printf("command parsed\n");
         list_print(command);
-        printf("command printed\n");
         list_free(command);
     } 
     puts("\n----------------");
