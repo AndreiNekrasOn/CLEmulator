@@ -86,11 +86,11 @@ char* scan_command()
     return command_str;
 }
 
-int start_new_word(int new_word_flag, list* tail)
+int start_new_word(int new_word_flag, list** tail)
 {
     if (new_word_flag)
     {
-        tail = list_insert(tail);
+        *tail = list_insert(*tail);
         new_word_flag = 0;
     }
     return new_word_flag;
@@ -125,7 +125,7 @@ list* parse_command(const char* command)
         {
             if (command[i] == '"')
                 quote_flag = !quote_flag;
-            new_word_flag = start_new_word(new_word_flag, tail);
+            new_word_flag = start_new_word(new_word_flag, &tail);
             if (head == NULL)
                 head = tail;
             tail->word = update_str(tail->word, command[i], &word_size, &word_cap);
