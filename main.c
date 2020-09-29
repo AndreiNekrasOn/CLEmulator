@@ -24,7 +24,8 @@ char* reallocate_str(char* str, int size, int* capacity)
 
 list* list_init()
 {
-    list* l = malloc(sizeof(*l));
+    list* l;
+    l = malloc(sizeof(*l));
     l->next = NULL;
     l->word = NULL;
     return l;
@@ -49,6 +50,26 @@ void list_free(list* head)
     list_free(next);
 }
 
+void list_free_no_words(list* head)
+{
+    list* next;
+    if (head == NULL)
+        return;
+    next = head->next;
+    free(head);
+    list_free_no_words(next);
+}
+
+int _list_size_tailrec(list* head, int acc) {
+    if (head == NULL)
+        return acc;
+    return _list_size_tailrec(head->next, acc + 1); 
+}
+
+int list_size(list* head) {
+   return _list_size_tailrec(head, 0);
+}
+
 char* update_str(char* str, char symbol, int* size, int* capacity)
 {
     if (str == NULL) /* word is not initiated */
@@ -64,9 +85,10 @@ char* update_str(char* str, char symbol, int* size, int* capacity)
 
 list* list_insert(list* tail)
 {
+    list* child;
     if (tail == NULL)
         return list_init();
-    list* child = list_init();
+    child = list_init();
     tail->next = child;
     return child;
 }
@@ -142,6 +164,25 @@ list* parse_command(const char* command)
     }
     return head;
 }
+
+char** list_to_array(list** head) {
+    char** arr;
+    int size;
+    list* curr;
+    int i;
+    if (head == NULL) 
+        return NULL;
+    size = list_size(*head); 
+    arr = malloc(size * sizeof(*arr));
+    for (curr = *head, i = 0; curr != NULL && i < size; 
+         curr = curr->next, i++)
+    {
+        arr[i] = curr->word;
+    }
+    list_free_no_words(*head);
+    return arr;
+}
+
 
 int main()
 {
