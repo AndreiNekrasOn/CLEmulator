@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 enum
 {
-    DEFAULT_STRING_CAP = 32
+    default_string_cap = 32
 };
 
 typedef struct list
@@ -41,9 +40,10 @@ void list_print(const list* head)
 
 void list_free(list* head)
 {
+    list* next;
     if (head == NULL)
         return;
-    list* next = head->next;
+    next = head->next;
     free(head->word);
     free(head);
     list_free(next);
@@ -75,7 +75,7 @@ char* scan_command()
 {
     int symbol;
     int size = 0;
-    int capacity = DEFAULT_STRING_CAP;
+    int capacity = default_string_cap;
     char* command_str = NULL;
     while ((symbol = getchar()) != EOF)
     {
@@ -96,30 +96,32 @@ int start_new_word(int new_word_flag, list** tail)
     return new_word_flag;
 }
 
-void mutate_to_default(int* word_size, int* word_cap, int* quote_flag, int* new_word_flag)
+void mutate_to_default(int* word_size, int* word_cap, int* quote_flag, 
+                       int* new_word_flag)
 {
     *word_size = 0;
-    *word_cap = DEFAULT_STRING_CAP;
+    *word_cap = default_string_cap;
     *quote_flag = 0;
     *new_word_flag = 1;
 }
 
 list* parse_command(const char* command)
 {
-    if (command == NULL)
-        return NULL;
     list* head = NULL;
     list* tail = NULL;
-    int word_size, word_cap, quote_flag, new_word_flag;
-    mutate_to_default(&word_size, &word_cap, &quote_flag, &new_word_flag);
     int i;
+    int word_size, word_cap, quote_flag, new_word_flag;
+    if (command == NULL)
+        return NULL;
+    mutate_to_default(&word_size, &word_cap, &quote_flag, &new_word_flag);
     for (i = 0; command[i] != '\0'; i++)
     {
         if (command[i] == ' ' && !quote_flag)
         {
             if (word_size == 0)
                 continue;
-            mutate_to_default(&word_size, &word_cap, &quote_flag, &new_word_flag);
+            mutate_to_default(&word_size, &word_cap, &quote_flag, 
+                              &new_word_flag);
         }
         else
         {
@@ -128,7 +130,8 @@ list* parse_command(const char* command)
             new_word_flag = start_new_word(new_word_flag, &tail);
             if (head == NULL)
                 head = tail;
-            tail->word = update_str(tail->word, command[i], &word_size, &word_cap);
+            tail->word = update_str(tail->word, command[i], &word_size, 
+                                    &word_cap);
         }
     }
     if (quote_flag)
@@ -142,10 +145,11 @@ list* parse_command(const char* command)
 
 int main()
 {
+    list* command;
     while (!feof(stdin))
     {
         printf(">>");
-        list* command = parse_command(scan_command());
+        command = parse_command(scan_command());
         list_print(command);
         list_free(command);
     }
