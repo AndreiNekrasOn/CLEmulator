@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -199,6 +200,37 @@ void free_argv(char** argv)
     free(argv);
 }
 
+int check_cd_command(char* name)
+{
+    return !strcmp(name, "cd");
+}
+
+void perform_cd_command(char* dir)
+{
+    int err_code;
+    err_code = chdir(dir);
+    if (err_code)
+        perror(dir);
+}
+
+void perform_command(char** argv)
+{
+    if (check_cd_command(argv[0]))
+    {
+        perform_cd_command(argv[1]);
+    }
+    else
+    {
+        if (!fork())
+        {
+            execvp(argv[0], argv);
+            perror(argv[0]);
+            exit(1);
+        }
+        wait(NULL);
+    }
+}
+
 int main()
 {
     list* command;
@@ -207,18 +239,12 @@ int main()
     {
         printf(">>");
         command = parse_command(scan_command());
+        if (command == NULL)
+            continue;
         list_print(command);
         cmd_argv = list_to_argv(&command);
-        if (!fork())
-        {
-            execvp(cmd_argv[0], cmd_argv);
-            perror(cmd_argv[0]);
-            exit(1);
-        }
-        wait(NULL);
-
+        perform_command(cmd_argv);
         free_argv(cmd_argv);
-        /* list_free(command); */
     }
     return 0;
 }
