@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 enum
 {
@@ -60,14 +63,16 @@ void list_free_no_words(list* head)
     list_free_no_words(next);
 }
 
-int _list_size_tailrec(list* head, int acc) {
+int _list_size_tailrec(list* head, int acc)
+{
     if (head == NULL)
         return acc;
-    return _list_size_tailrec(head->next, acc + 1); 
+    return _list_size_tailrec(head->next, acc + 1);
 }
 
-int list_size(list* head) {
-   return _list_size_tailrec(head, 0);
+int list_size(list* head)
+{
+    return _list_size_tailrec(head, 0);
 }
 
 char* update_str(char* str, char symbol, int* size, int* capacity)
@@ -118,7 +123,7 @@ int start_new_word(int new_word_flag, list** tail)
     return new_word_flag;
 }
 
-void mutate_to_default(int* word_size, int* word_cap, int* quote_flag, 
+void mutate_to_default(int* word_size, int* word_cap, int* quote_flag,
                        int* new_word_flag)
 {
     *word_size = 0;
@@ -142,7 +147,7 @@ list* parse_command(const char* command)
         {
             if (word_size == 0)
                 continue;
-            mutate_to_default(&word_size, &word_cap, &quote_flag, 
+            mutate_to_default(&word_size, &word_cap, &quote_flag,
                               &new_word_flag);
         }
         else
@@ -152,8 +157,8 @@ list* parse_command(const char* command)
             new_word_flag = start_new_word(new_word_flag, &tail);
             if (head == NULL)
                 head = tail;
-            tail->word = update_str(tail->word, command[i], &word_size, 
-                                    &word_cap);
+            tail->word
+                = update_str(tail->word, command[i], &word_size, &word_cap);
         }
     }
     if (quote_flag)
@@ -165,34 +170,55 @@ list* parse_command(const char* command)
     return head;
 }
 
-char** list_to_array(list** head) {
+char** list_to_argv(list** head)
+{
     char** arr;
     int size;
     list* curr;
     int i;
-    if (head == NULL) 
+    if (head == NULL)
         return NULL;
-    size = list_size(*head); 
+    size = list_size(*head) + 1; /* all words from list and NULL at the end */
     arr = malloc(size * sizeof(*arr));
-    for (curr = *head, i = 0; curr != NULL && i < size; 
-         curr = curr->next, i++)
+    for (curr = *head, i = 0; curr != NULL && i < size; curr = curr->next, i++)
     {
         arr[i] = curr->word;
     }
+    arr[size - 1] = NULL;
     list_free_no_words(*head);
     return arr;
 }
 
+void free_argv(char** argv)
+{
+    int i;
+    for (i = 0; argv != NULL && argv[i] != NULL; i++)
+    {
+        free(argv[i]);
+    }
+    free(argv);
+}
 
 int main()
 {
     list* command;
+    char** cmd_argv;
     while (!feof(stdin))
     {
         printf(">>");
         command = parse_command(scan_command());
         list_print(command);
-        list_free(command);
+        cmd_argv = list_to_argv(&command);
+        if (!fork())
+        {
+            execvp(cmd_argv[0], cmd_argv);
+            perror(cmd_argv[0]);
+            exit(1);
+        }
+        wait(NULL);
+
+        free_argv(cmd_argv);
+        /* list_free(command); */
     }
     return 0;
 }

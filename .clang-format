@@ -1,0 +1,6 @@
+BasedOnStyle: WebKit
+IndentWidth: 4
+ColumnLimit: 80
+AlignAfterOpenBracket: Align
+AllowShortFunctionsOnASingleLine: false
+BreakBeforeBraces: Allman
