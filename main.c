@@ -119,8 +119,8 @@ char* scan_command()
     return command_str;
 }
 
-void update_word(int* new_word_flag, list** tail, list** head,  char symbol,
-                 int *word_size, int *word_cap)
+void update_word(int* new_word_flag, list** tail, list** head, char symbol,
+                 int* word_size, int* word_cap)
 {
     if (*new_word_flag)
     {
@@ -130,7 +130,7 @@ void update_word(int* new_word_flag, list** tail, list** head,  char symbol,
     if (*head == NULL)
         *head = *tail;
 
-    (*tail)->word = update_str((*tail)->word, symbol,  word_size, word_cap);
+    (*tail)->word = update_str((*tail)->word, symbol, word_size, word_cap);
 }
 
 void mutate_to_default(int* word_size, int* word_cap, int* quote_flag,
@@ -147,7 +147,7 @@ int check_separator_list(char symbol, const char* separators,
 {
     if (separators == NULL || quote_flag)
         return 0;
-    return strchr(separators, symbol) != NULL; 
+    return strchr(separators, symbol) != NULL;
 }
 
 list* parse_command(const char* command, const char* separators)
@@ -179,7 +179,7 @@ list* parse_command(const char* command, const char* separators)
         {
             if (command[i] == '"')
                 quote_flag = !quote_flag;
-            update_word(&new_word_flag, &tail, &head, command[i], 
+            update_word(&new_word_flag, &tail, &head, command[i],
                         &word_size, &word_cap);
         }
     }
@@ -200,7 +200,7 @@ char** list_to_argv(list** head)
     int i;
     if (head == NULL)
         return NULL;
-    size = list_size(*head) + 1; 
+    size = list_size(*head) + 1;
     arr = malloc(size * sizeof(*arr));
     for (curr = *head, i = 0; curr != NULL && i < size;
          curr = curr->next, i++)
@@ -275,7 +275,7 @@ int main()
             continue;
         list_print(command);
         cmd_argv = list_to_argv(&command);
-        /* perform_command(cmd_argv); */
+        perform_command(cmd_argv);
         free_argv(cmd_argv);
     }
     return 0;
