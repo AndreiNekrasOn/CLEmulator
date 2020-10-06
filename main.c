@@ -179,9 +179,10 @@ char** list_to_argv(list** head)
     int i;
     if (head == NULL)
         return NULL;
-    size = list_size(*head) + 1; /* all words from list and NULL at the end */
+    size = list_size(*head) + 1; 
     arr = malloc(size * sizeof(*arr));
-    for (curr = *head, i = 0; curr != NULL && i < size; curr = curr->next, i++)
+    for (curr = *head, i = 0; curr != NULL && i < size;
+         curr = curr->next, i++)
     {
         arr[i] = curr->word;
     }
@@ -208,7 +209,13 @@ int check_cd_command(char* name)
 void perform_cd_command(char* dir)
 {
     int err_code;
+    if (dir == NULL)
+    {
+        fprintf(stderr, "Argument expected\n");
+        return;
+    }
     err_code = chdir(dir);
+
     if (err_code)
         perror(dir);
 }
