@@ -10,6 +10,11 @@ enum
     default_string_cap = 32
 };
 
+enum Separators
+{
+    daemon_separator = '&'
+};
+
 typedef struct list
 {
     char* word;
@@ -114,14 +119,18 @@ char* scan_command()
     return command_str;
 }
 
-int start_new_word(int new_word_flag, list** tail)
+void update_word(int* new_word_flag, list** tail, list** head,  char symbol,
+                 int *word_size, int *word_cap)
 {
-    if (new_word_flag)
+    if (*new_word_flag)
     {
         *tail = list_insert(*tail);
-        new_word_flag = 0;
+        *new_word_flag = 0;
     }
-    return new_word_flag;
+    if (*head == NULL)
+        *head = *tail;
+
+    (*tail)->word = update_str((*tail)->word, symbol,  word_size, word_cap);
 }
 
 void mutate_to_default(int* word_size, int* word_cap, int* quote_flag,
@@ -133,7 +142,15 @@ void mutate_to_default(int* word_size, int* word_cap, int* quote_flag,
     *new_word_flag = 1;
 }
 
-list* parse_command(const char* command)
+int check_separator_list(char symbol, const char* separators,
+                         int quote_flag)
+{
+    if (separators == NULL || quote_flag)
+        return 0;
+    return strchr(separators, symbol) != NULL; 
+}
+
+list* parse_command(const char* command, const char* separators)
 {
     list* head = NULL;
     list* tail = NULL;
@@ -144,10 +161,17 @@ list* parse_command(const char* command)
     mutate_to_default(&word_size, &word_cap, &quote_flag, &new_word_flag);
     for (i = 0; command[i] != '\0'; i++)
     {
-        if (command[i] == ' ' && !quote_flag)
+        if (check_separator_list(command[i], separators, quote_flag))
         {
-            if (word_size == 0)
+            if (command[i] == ' ' && word_size == 0)
                 continue;
+            else if (command[i] != ' ')
+            {
+                word_size = 1;
+                new_word_flag = 1;
+                update_word(&new_word_flag, &tail, &head, command[i],
+                            &word_size, &word_cap);
+            }
             mutate_to_default(&word_size, &word_cap, &quote_flag,
                               &new_word_flag);
         }
@@ -155,11 +179,8 @@ list* parse_command(const char* command)
         {
             if (command[i] == '"')
                 quote_flag = !quote_flag;
-            new_word_flag = start_new_word(new_word_flag, &tail);
-            if (head == NULL)
-                head = tail;
-            tail->word
-                = update_str(tail->word, command[i], &word_size, &word_cap);
+            update_word(&new_word_flag, &tail, &head, command[i], 
+                        &word_size, &word_cap);
         }
     }
     if (quote_flag)
@@ -242,15 +263,19 @@ int main()
 {
     list* command;
     char** cmd_argv;
+    const char* separators = " &";
+    char* user_input;
     while (!feof(stdin))
     {
         printf(">>");
-        command = parse_command(scan_command());
+        user_input = scan_command();
+        command = parse_command(user_input, separators);
+        free(user_input);
         if (command == NULL)
             continue;
         list_print(command);
         cmd_argv = list_to_argv(&command);
-        perform_command(cmd_argv);
+        /* perform_command(cmd_argv); */
         free_argv(cmd_argv);
     }
     return 0;
