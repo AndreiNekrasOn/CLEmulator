@@ -15,6 +15,12 @@ enum Separators
     daemon_separator = '&'
 };
 
+enum ParseStatus
+{
+    invalid_daemon_format,
+    ok
+};
+
 typedef struct list
 {
     char* word;
@@ -222,12 +228,44 @@ void free_argv(char** argv)
     free(argv);
 }
 
+int get_argc(char** argv)
+{
+    int i = 0;
+    if (argv == NULL || *argv == NULL)
+        return 0;
+    while (argv[i++] != NULL) {}
+    return i - 1;
+}
+
 int check_cd_command(char* name)
 {
     return !strcmp(name, "cd");
 }
 
-void perform_cd_command(char* dir)
+int check_daemon(char** argv)
+{
+    int argc;
+    argc = get_argc(argv);
+    if (argc < 2)
+        return 0;
+    return argv[argc - 1][0] == daemon_separator;
+}
+
+enum ParseStatus validate_argv(char** argv)
+{
+    int i;
+    if (check_daemon(argv))
+    {
+        for (i = 0; argv[i] != 0; i++)
+        {
+            if (argv[i][0] != '"' && (strchr(argv[i], daemon_separator) + 1) != NULL)
+                return invalid_daemon_format;
+        }
+    }
+    return ok;
+}
+
+void perform_cd_command(const char* dir)
 {
     int err_code;
     if (dir == NULL)
@@ -236,27 +274,32 @@ void perform_cd_command(char* dir)
         return;
     }
     err_code = chdir(dir);
-
     if (err_code)
         perror(dir);
 }
 
 void perform_command(char** argv)
 {
+    int pid;
+    int is_daemon;
     if (check_cd_command(argv[0]))
-    {
         perform_cd_command(argv[1]);
-    }
     else
     {
-        if (!fork())
+        is_daemon = check_daemon(argv);
+        pid = fork();
+        if (!pid)
         {
+            if (is_daemon)
+                argv[get_argc(argv) - 1] = NULL;
             execvp(argv[0], argv);
             perror(argv[0]);
             exit(1);
         }
-        wait(NULL);
+        if (!is_daemon)
+            while (wait(NULL) != pid);
     }
+    while (waitpid(-1, NULL, WNOHANG) > 0); /* remove zombies */
 }
 
 int main()
@@ -275,6 +318,7 @@ int main()
             continue;
         list_print(command);
         cmd_argv = list_to_argv(&command);
+        printf("program is daemon: %s\n", check_daemon(cmd_argv) ? "true" : "false"); 
         perform_command(cmd_argv);
         free_argv(cmd_argv);
     }
