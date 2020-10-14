@@ -5,6 +5,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "list.h"
+
 enum
 {
     default_string_cap = 32
@@ -15,18 +17,6 @@ enum Separators
     daemon_separator = '&'
 };
 
-enum ParseStatus
-{
-    invalid_daemon_format,
-    ok
-};
-
-typedef struct list
-{
-    char* word;
-    struct list* next;
-} list;
-
 char* reallocate_str(char* str, int size, int* capacity)
 {
     if (size + 1 == *capacity)
@@ -35,56 +25,6 @@ char* reallocate_str(char* str, int size, int* capacity)
         str = realloc(str, *capacity);
     }
     return str;
-}
-
-list* list_init()
-{
-    list* l;
-    l = malloc(sizeof(*l));
-    l->next = NULL;
-    l->word = NULL;
-    return l;
-}
-
-void list_print(const list* head)
-{
-    if (head == NULL)
-        return;
-    printf("%s\n", head->word);
-    list_print(head->next);
-}
-
-void list_free(list* head)
-{
-    list* next;
-    if (head == NULL)
-        return;
-    next = head->next;
-    free(head->word);
-    free(head);
-    list_free(next);
-}
-
-void list_free_no_words(list* head)
-{
-    list* next;
-    if (head == NULL)
-        return;
-    next = head->next;
-    free(head);
-    list_free_no_words(next);
-}
-
-int _list_size_tailrec(list* head, int acc)
-{
-    if (head == NULL)
-        return acc;
-    return _list_size_tailrec(head->next, acc + 1);
-}
-
-int list_size(list* head)
-{
-    return _list_size_tailrec(head, 0);
 }
 
 char* update_str(char* str, char symbol, int* size, int* capacity)
@@ -98,16 +38,6 @@ char* update_str(char* str, char symbol, int* size, int* capacity)
     str[(*size)++] = symbol;
     str[(*size)] = '\0';
     return str;
-}
-
-list* list_insert(list* tail)
-{
-    list* child;
-    if (tail == NULL)
-        return list_init();
-    child = list_init();
-    tail->next = child;
-    return child;
 }
 
 char* scan_command()
@@ -251,20 +181,6 @@ int check_daemon(char** argv)
     return argv[argc - 1][0] == daemon_separator;
 }
 
-enum ParseStatus validate_argv(char** argv)
-{
-    int i;
-    if (check_daemon(argv))
-    {
-        for (i = 0; argv[i] != 0; i++)
-        {
-            if (argv[i][0] != '"' && (strchr(argv[i], daemon_separator) + 1) != NULL)
-                return invalid_daemon_format;
-        }
-    }
-    return ok;
-}
-
 void perform_cd_command(const char* dir)
 {
     int err_code;
@@ -318,7 +234,6 @@ int main()
             continue;
         list_print(command);
         cmd_argv = list_to_argv(&command);
-        printf("program is daemon: %s\n", check_daemon(cmd_argv) ? "true" : "false"); 
         perform_command(cmd_argv);
         free_argv(cmd_argv);
     }
