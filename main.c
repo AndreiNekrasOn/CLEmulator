@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,9 +13,14 @@ enum
     default_string_cap = 32
 };
 
-enum Separators
+enum separator_type
 {
-    daemon_separator = '&'
+    not_separator,
+    space,
+    daemon,
+    redirect_in,
+    redirect_out,
+    append_in
 };
 
 char* reallocate_str(char* str, int size, int* capacity)
@@ -55,9 +61,11 @@ char* scan_command()
     return command_str;
 }
 
-void update_word(int* new_word_flag, list** tail, list** head, char symbol,
-                 int* word_size, int* word_cap)
+void update_word(int* new_word_flag, list** tail, list** head,
+                 const char* symbols, int len, int* word_size,
+                 int* word_cap)
 {
+    int i;
     if (*new_word_flag)
     {
         *tail = list_insert(*tail);
@@ -65,8 +73,9 @@ void update_word(int* new_word_flag, list** tail, list** head, char symbol,
     }
     if (*head == NULL)
         *head = *tail;
-
-    (*tail)->word = update_str((*tail)->word, symbol, word_size, word_cap);
+    for (i = 0; i < len; i++)
+        (*tail)->word
+            = update_str((*tail)->word, symbols[i], word_size, word_cap);
 }
 
 void mutate_to_default(int* word_size, int* word_cap, int* quote_flag,
@@ -78,44 +87,90 @@ void mutate_to_default(int* word_size, int* word_cap, int* quote_flag,
     *new_word_flag = 1;
 }
 
-int check_separator_list(char symbol, const char* separators,
-                         int quote_flag)
+enum separator_type identify_separator(char* separator)
 {
-    if (separators == NULL || quote_flag)
-        return 0;
-    return strchr(separators, symbol) != NULL;
+    if (separator == NULL)
+        return not_separator;
+    if (!strncmp(separator, ">>", 2))
+        return append_in;
+    if (!strncmp(separator, ">", 1))
+        return redirect_in;
+    if (!strncmp(separator, "<", 1))
+        return redirect_out;
+    if (!strncmp(separator, "&", 1))
+        return daemon;
+    if (isspace(separator[0]))
+        return space;
+    return not_separator;
 }
 
-list* parse_command(const char* command, const char* separators)
+enum separator_type check_separator_list(const char* str_i,
+                                         const list* separators, int quote_flag)
 {
-    list* head = NULL;
-    list* tail = NULL;
-    int i;
-    int word_size, word_cap, quote_flag, new_word_flag;
-    if (command == NULL)
+    list sep_copy;
+    if (str_i == NULL || quote_flag)
+        return not_separator;
+    if (separators == NULL) /* only tokenize spaces */
+        return isspace(*str_i) ? space : not_separator;
+    for (sep_copy = *separators; sep_copy.next != NULL; sep_copy = *sep_copy.next)
+    {
+        if (!strncmp(str_i, sep_copy.word, strlen(sep_copy.word)))
+            return identify_separator(sep_copy.word);
+    }
+    return not_separator;
+}
+
+char* get_separator_value_by_type(enum separator_type st)
+{
+    switch (st)
+    {
+    case daemon:
+        return "&";
+    case append_in:
+        return ">>";
+    case redirect_in:
+        return ">";
+    case redirect_out:
+        return "<";
+    default:
+        fprintf(stderr, "Illegal argument for get_separator_by_type");
+        return NULL;
+    }
+}
+
+list* tokenize_string(const char* str, list* separators)
+{
+    list *head = NULL, *tail = NULL;
+    int i, word_size, word_cap, quote_flag, new_word_flag;
+    enum separator_type sep;
+    char* sep_value;
+    if (str == NULL)
         return NULL;
     mutate_to_default(&word_size, &word_cap, &quote_flag, &new_word_flag);
-    for (i = 0; command[i] != '\0'; i++)
+    for (i = 0; str[i] != '\0'; i++)
     {
-        if (check_separator_list(command[i], separators, quote_flag))
+        if ((sep = check_separator_list(str + i, separators, quote_flag))
+            != not_separator)
         {
-            if (command[i] == ' ' && word_size == 0)
+            if (sep == space && word_size == 0)
                 continue;
-            else if (command[i] != ' ')
+            else if (sep != space)
             {
-                word_size = 1;
+                sep_value = get_separator_value_by_type(sep);
+                word_size = strlen(sep_value);
                 new_word_flag = 1;
-                update_word(&new_word_flag, &tail, &head, command[i],
-                            &word_size, &word_cap);
+                update_word(&new_word_flag, &tail, &head, sep_value,
+                            word_size, &word_size, &word_cap);
+                i += (word_size - 1); /* in case of a long token */
             }
             mutate_to_default(&word_size, &word_cap, &quote_flag,
                               &new_word_flag);
         }
         else
         {
-            if (command[i] == '"')
+            if (str[i] == '"')
                 quote_flag = !quote_flag;
-            update_word(&new_word_flag, &tail, &head, command[i],
+            update_word(&new_word_flag, &tail, &head, &str[i], 1,
                         &word_size, &word_cap);
         }
     }
@@ -163,7 +218,8 @@ int get_argc(char** argv)
     int i = 0;
     if (argv == NULL || *argv == NULL)
         return 0;
-    while (argv[i++] != NULL) {}
+    while (argv[i++] != NULL)
+        ;
     return i - 1;
 }
 
@@ -178,7 +234,7 @@ int check_daemon(char** argv)
     argc = get_argc(argv);
     if (argc < 2)
         return 0;
-    return argv[argc - 1][0] == daemon_separator;
+    return argv[argc - 1][0] == '&';
 }
 
 void perform_cd_command(const char* dir)
@@ -213,22 +269,29 @@ void perform_command(char** argv)
             exit(1);
         }
         if (!is_daemon)
-            while (wait(NULL) != pid);
+            while (wait(NULL) != pid)
+                ;
     }
-    while (waitpid(-1, NULL, WNOHANG) > 0); /* remove zombies */
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+        ; /* remove zombies */
+}
+
+list* create_default_separators()
+{
+    return tokenize_string(">> & < ", NULL);
 }
 
 int main()
 {
     list* command;
     char** cmd_argv;
-    const char* separators = " &";
+    list* separators = create_default_separators();
     char* user_input;
     while (!feof(stdin))
     {
-        printf(">>");
+        printf("::$ ");
         user_input = scan_command();
-        command = parse_command(user_input, separators);
+        command = tokenize_string(user_input, separators);
         free(user_input);
         if (command == NULL)
             continue;
@@ -237,5 +300,7 @@ int main()
         perform_command(cmd_argv);
         free_argv(cmd_argv);
     }
+    list_free_no_words(separators);
+    puts("\n-----");
     return 0;
 }
