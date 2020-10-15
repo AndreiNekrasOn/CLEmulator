@@ -52,12 +52,12 @@ int list_size(list* head)
     return _list_size_tailrec(head, 0);
 }
 
-list* list_insert(list* tail)
+list* list_insert(list* tail, char* data)
 {
     list* child;
-    if (tail == NULL)
-        return list_init();
     child = list_init();
-    tail->next = child;
+    child->word = data;
+    if (tail != NULL)
+        tail->next = child;
     return child;
 }
