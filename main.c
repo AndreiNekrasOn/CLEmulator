@@ -183,6 +183,11 @@ int is_daemon(char** argv)
 int perform_redirect(char* filename, int strem_fd, int flags)
 {
     int fd;
+    if (filename == NULL)
+    {
+        fprintf(stderr, "Filename expected\n");
+        return -1;
+    }
     fd = open(filename, flags, 0666);
     if (fd == -1)
         return -1;
@@ -241,7 +246,7 @@ void perform_command(char** argv)
                 argv[get_argc(argv) - 1] = NULL;
             if (check_and_perform_redirect(argv) == -1)
             {
-                perror("Cannot perform redirection");
+                fprintf(stderr, "Cannot perform redirection\n");
                 exit(1);
             }
             execvp(argv[0], argv);
