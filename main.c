@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,8 +8,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-/* #include <regex.h> */
 
+#include "argv_processing.h"
 #include "list.h"
 
 #ifndef O_BINARY
@@ -29,6 +30,12 @@ enum separator_type
     redirect_stdin,
     redirect_stdout_a
 };
+
+void remove_zombies(int n)
+{
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+        ;
+}
 
 /* str memory and input */
 char* reallocate_str(char* str, int size, int* capacity)
@@ -126,7 +133,6 @@ char* get_separator_value_by_type(enum separator_type st)
     }
 }
 
-
 void update_word(int* new_word_flag, list** tail, list** head,
                  const char* symbols, int len, int* word_size,
                  int* word_cap)
@@ -196,110 +202,6 @@ list* tokenize_string(const char* str, list* separators)
         return NULL;
     }
     return head;
-}
-
-/*
-regex_t get_parser_regex()
-{
-    regex_t result;
-    const char* regex_str = "\"[^\"]+\"|[^ ><&\"]+|&|>>|>|<|\"";
-    if (regcomp(&result, regex_str, REG_EXTENDED))
-    {
-        perror("Could not compile regex");
-        exit(1);
-    }
-    return result;
-}
-
-list* tokenize_string(const char* str, regex_t regex_compiled)
-{
-    regmatch_t match_info;
-    char* word;
-    list* head = NULL, *tail = NULL;
-    int word_size, i;
-    if (str == NULL)
-        return NULL;
-    for (i = 0;
-         !regexec(&regex_compiled, str + i, 1, &match_info, 0);
-         i += match_info.rm_eo)
-    {
-        word_size = match_info.rm_eo - match_info.rm_so;
-        word = malloc(word_size + 1);
-        strncpy(word, str + i + match_info.rm_so, word_size);
-        word[word_size] = '\0';
-        tail = list_insert(tail, word);
-        if (head == NULL)
-        head = tail;
-    }
-    return head;
-}
-*/
-
-/* argv processing */
-char** list_to_argv(list** head)
-{
-    char** arr;
-    int size;
-    list* curr;
-    int i;
-    if (head == NULL)
-        return NULL;
-    size = list_size(*head) + 1;
-    arr = malloc(size * sizeof(*arr));
-    for (curr = *head, i = 0; curr != NULL && i < size;
-         curr = curr->next, i++)
-    {
-        arr[i] = curr->word;
-    }
-    arr[size - 1] = NULL;
-    list_free_no_words(*head);
-    return arr;
-}
-
-void free_argv(char** argv)
-{
-    int i;
-    for (i = 0; argv != NULL && argv[i] != NULL; i++)
-        free(argv[i]);
-    free(argv);
-}
-
-int get_argc(char** argv)
-{
-    int i = 0;
-    if (argv == NULL || *argv == NULL)
-        return 0;
-    while (argv[i++] != NULL)
-        ;
-    return i - 1;
-}
-
-int argv_contains(char* argv[], const char* match_str)
-{
-    int i;
-    for (i = 0; argv[i] != NULL; i++)
-    {
-        if (!strcmp(argv[i], match_str))
-            return i;
-    }
-    return -1;
-}
-
-void remove_from_argv(char* argv[], int idx)
-{
-    for (; argv[idx + 1] != NULL; idx++)
-        argv[idx] = argv[idx + 1];
-    argv[idx] = NULL;
-}
-
-int retrieve_from_argv(char* argv[], const char* match_str)
-{
-    int i;
-    i = argv_contains(argv, match_str);
-    if (i == -1)
-        return -1;
-    remove_from_argv(argv, i);
-    return i;
 }
 
 /* performing programm */
@@ -387,8 +289,6 @@ void perform_command(char** argv)
             while (wait(NULL) != pid)
                 ;
     }
-    while (waitpid(-1, NULL, WNOHANG) > 0)
-        ; /* remove zombies */
 }
 
 /* main method */
@@ -396,11 +296,10 @@ int main(int argc, char* argv[])
 {
     list* command;
     char** cmd_argv;
-    /* regex_t separators_regex; */
     char* user_input;
     list* separators;
+    signal(SIGCHLD, remove_zombies);
     separators = tokenize_string(">> > < &", NULL);
-    /* separators_regex = get_parser_regex(); */
     while (!feof(stdin))
     {
         printf("::$ ");
@@ -409,13 +308,11 @@ int main(int argc, char* argv[])
         free(user_input);
         if (command == NULL)
             continue;
-        /* list_print(command); */
         cmd_argv = list_to_argv(&command);
         perform_command(cmd_argv);
         free_argv(cmd_argv);
     }
     puts("\n-----");
-    /* regfree(&separators_regex); */
     list_free_no_words(separators);
     return 0;
 }

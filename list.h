@@ -1,5 +1,6 @@
 #ifndef CLEMULATOR_LIST_H
 #define CLEMULATOR_LIST_H
+
 typedef struct list
 {
     char* word;
