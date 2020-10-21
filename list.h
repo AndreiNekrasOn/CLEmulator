@@ -12,5 +12,5 @@ void list_free(list* head);
 void list_free_no_words(list* head);
 int _list_size_tailrec(list* head, int acc);
 int list_size(list* head);
-list* list_insert(list* tail, char* data);
+list* list_insert(list* tail);
 #endif
