@@ -28,7 +28,8 @@ enum separator_type
     daemon,
     redirect_stdout,
     redirect_stdin,
-    redirect_stdout_a
+    redirect_stdout_a,
+    pipe_line
 };
 
 /* action on signal SIGCHLD */
@@ -84,14 +85,16 @@ enum separator_type identify_separator(char* separator)
 {
     if (separator == NULL)
         return not_separator;
-    if (!strncmp(separator, ">>", 2))
+    if (!strcmp(separator, ">>"))
         return redirect_stdout_a;
-    if (!strncmp(separator, ">", 1))
+    if (!strcmp(separator, ">"))
         return redirect_stdout;
-    if (!strncmp(separator, "<", 1))
+    if (!strcmp(separator, "<"))
         return redirect_stdin;
-    if (!strncmp(separator, "&", 1))
+    if (!strcmp(separator, "&"))
         return daemon;
+    if (!strcmp(separator, "|"))
+        return pipe_line;
     if (isspace(separator[0]))
         return space;
     return not_separator;
@@ -129,6 +132,8 @@ char* get_separator_value_by_type(enum separator_type st)
         return ">";
     case redirect_stdin:
         return "<";
+    case pipe_line:
+        return "|";
     default:
         return NULL;
     }
@@ -263,7 +268,7 @@ void perform_cd_command(const char* dir)
         perror(dir);
 }
 
-void perform_command(char** argv)
+void perform_single_command(char** argv)
 {
     int pid;
     int daemon_flag;
@@ -292,6 +297,31 @@ void perform_command(char** argv)
     }
 }
 
+void perform_pipe(char*** piped)
+{
+    perform_single_command(piped[0]);
+}
+
+void perform_command(char* argv[])
+{
+    
+    char*** piped;
+    int num_pipes;
+    if (is_argv_valid(argv))
+    {
+        num_pipes = count_pipes(argv);
+        printf("counted %d pipes\n", num_pipes);
+        piped = pipe_split_argv(argv);
+        if (num_pipes == 1)
+            perform_single_command(piped[0]);
+        else if (is_piped_valid(piped, num_pipes))
+            perform_pipe(piped);
+        /*free_piped_argv(piped, num_pipes);*/
+    }
+    else
+        free_argv(argv);
+}
+
 /* main method */
 int main(int argc, char* argv[])
 {
@@ -300,20 +330,19 @@ int main(int argc, char* argv[])
     char* user_input;
     list* separators;
     signal(SIGCHLD, remove_zombies);
-    separators = tokenize_string(">> > < &", NULL);
+    separators = tokenize_string(">> > < & |", NULL);
     while (!feof(stdin))
     {
         printf("::$ ");
         user_input = scan_command();
         command = tokenize_string(user_input, separators);
+        list_print(command);
         free(user_input);
         if (command == NULL)
             continue;
         cmd_argv = list_to_argv(&command);
-        if (is_argv_valid(cmd_argv))
         perform_command(cmd_argv);
-        free_argv(cmd_argv);
-    }
+     }
     puts("\n-----");
     list_free_no_words(separators);
     return 0;
