@@ -268,15 +268,13 @@ void perform_cd_command(const char* dir)
         perror(dir);
 }
 
-void perform_single_command(char** argv)
+void perform_single_command(char** argv, int daemon_flag)
 {
     int pid;
-    int daemon_flag;
     if (argv_contains(argv, "cd") == 0)
         perform_cd_command(argv[1]);
     else
     {
-        daemon_flag = is_daemon(argv);
         pid = fork();
         if (!pid)
         {
@@ -297,26 +295,36 @@ void perform_single_command(char** argv)
     }
 }
 
-void perform_pipe(char*** piped)
+void perform_pipe(char*** piped, int daemon_flag)
 {
-    perform_single_command(piped[0]);
+    perform_single_command(piped[0], daemon_flag);
 }
 
 void perform_command(char* argv[])
 {
-    
+
     char*** piped;
-    int num_pipes;
+    int num_pipes, daemon_flag;
     if (is_argv_valid(argv))
     {
+        daemon_flag = is_daemon(argv);
+        /* retrieve_from_argv(argv, "&");
+           // need to find a way to separate & and > >> < commands from
+           others
+           // maybe something like argv_cut(char* argv[], int position_to)
+           - everything after position two is retrieved...
+           // but only after figuring input/output streams/files
+           (name==NULL => standard)
+           // and after figuring daemon / non daemon
+        */
         num_pipes = count_pipes(argv);
-        printf("counted %d pipes\n", num_pipes);
         piped = pipe_split_argv(argv);
+        print_piped_argv(piped, num_pipes);
         if (num_pipes == 1)
-            perform_single_command(piped[0]);
+            perform_single_command(piped[0], daemon_flag);
         else if (is_piped_valid(piped, num_pipes))
-            perform_pipe(piped);
-        /*free_piped_argv(piped, num_pipes);*/
+            perform_pipe(piped, daemon_flag);
+        free_piped_argv(piped, num_pipes);
     }
     else
         free_argv(argv);
@@ -326,7 +334,6 @@ void perform_command(char* argv[])
 int main(int argc, char* argv[])
 {
     list* command;
-    char** cmd_argv;
     char* user_input;
     list* separators;
     signal(SIGCHLD, remove_zombies);
@@ -336,13 +343,9 @@ int main(int argc, char* argv[])
         printf("::$ ");
         user_input = scan_command();
         command = tokenize_string(user_input, separators);
-        list_print(command);
         free(user_input);
-        if (command == NULL)
-            continue;
-        cmd_argv = list_to_argv(&command);
-        perform_command(cmd_argv);
-     }
+        perform_command(list_to_argv(&command));
+    }
     puts("\n-----");
     list_free_no_words(separators);
     return 0;

@@ -134,10 +134,10 @@ int is_argv_valid(char* argv[])
         if (position == 0
             || !(position == argc - 2 - is_daemon
                  || (position + 2 < argc - is_daemon
-                     && (strcmp(argv[position + 2],
-                                redirect_words[(i + 1) % 3])
-                         || strcmp(argv[position + 2],
-                                   redirect_words[(i + 2) % 3])))))
+                     && (!strcmp(argv[position + 2],
+                                 redirect_words[(i + 1) % 3])
+                         || !strcmp(argv[position + 2],
+                                    redirect_words[(i + 2) % 3])))))
         {
             fprintf(stderr, "Invalid redirect keyword position\n");
             return 0;
@@ -157,13 +157,13 @@ int is_single_argv_valid(char* argv[])
     argc = get_argc(argv);
     if (argc == 0)
     {
-        fprintf(stderr, "No command\n");
+        fprintf(stderr, "No command provided\n");
         return 0;
     }
     if (argv_contains(argv, "cd") != -1
         && (argc != 2 || is_keyword(argv[1])))
     {
-        fprintf(stderr, "Bad argument for cd\n");
+        fprintf(stderr, "Argument expected for cd\n");
         return 0;
     }
     return 1;
@@ -187,15 +187,6 @@ int count_pipes(char* argv[])
     return argv_count_entries(argv, "|") + 1;
 }
 
-void debug_print_argv(char* argv[])
-{
-    int i;
-    for (i = 0; argv[i] != NULL; i++)
-        printf("%s ", argv[i]);
-    printf("\n");
-}
-
-
 char*** pipe_split_argv(char* argv[])
 {
     int num_pipes, i, position = 0;
@@ -207,24 +198,36 @@ char*** pipe_split_argv(char* argv[])
     splitted[0] = argv;
     for (i = 1; i < num_pipes; i++)
     {
-        position += argv_contains(&argv[position + (i > 1)], "|");
-        printf("Found | as argument №%d\n", position);
-        printf("Confirming: %s\n", argv[position + (i > 1)]);
-        printf("Next is %s\n", argv[position + 1]);
+        position += argv_contains(&argv[position], "|");
         free(argv[position]);
         argv[position] = NULL;
-        splitted[i] = &argv[position + 1];
+        splitted[i] = &argv[++position];
     }
-    for (i = 0; i < num_pipes; i++)
-        debug_print_argv(splitted[i]);
     return splitted;
 }
 
 void free_piped_argv(char*** piped_argv, int num_pipes)
 {
-   int i;
-   for (i = 0; i < num_pipes; i++)
-       free_argv(piped_argv[i]);
-   free(piped_argv);
+    int i, j;
+    for (i = 0; i < num_pipes; i++)
+    {
+        for (j = 0; piped_argv[i][j] != NULL; j++)
+        {
+            free(piped_argv[i][j]);
+        }
+    }
+    free(piped_argv[0]); /* thee only malloced memory for argv */
+    free(piped_argv);
 }
 
+void print_piped_argv(char*** piped_argv, int num_pipes)
+{
+    int i, j;
+    for (i = 0; i < num_pipes; i++)
+    {
+        printf("pipe %d: ", i);
+        for (j = 0; piped_argv[i][j] != NULL; j++)
+            printf("%s ", piped_argv[i][j]);
+        printf("\n");
+    }
+}

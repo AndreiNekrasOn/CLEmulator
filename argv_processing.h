@@ -16,5 +16,6 @@ int is_piped_valid(char*** piped, int num_pipes);
 int count_pipes(char* argv[]);
 char*** pipe_split_argv(char* argv[]);
 void free_piped_argv(char*** piped_argv, int num_pipes);
+void print_piped_argv(char*** piped_argv, int num_pipes);
 
 #endif
