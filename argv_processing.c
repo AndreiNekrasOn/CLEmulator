@@ -47,7 +47,7 @@ int argv_contains(char* argv[], const char* match_str)
     size = strlen(match_str);
     for (i = 0; argv[i] != NULL; i++)
     {
-        if (!strncmp(argv[i], match_str, size))
+        if (strlen(argv[i]) == size && !strncmp(argv[i], match_str, size))
             return i;
     }
     return -1;
@@ -59,7 +59,7 @@ int argv_count_entries(char* argv[], const char* match_str)
     size = strlen(match_str);
     for (i = 0; argv[i] != NULL; i++)
     {
-        if (!strncmp(argv[i], match_str, size))
+        if (strlen(argv[i]) == size && !strncmp(argv[i], match_str, size))
             res++;
     }
     return res;
@@ -93,9 +93,9 @@ int is_keyword(char* match_str)
     specials[4] = "|";
     for (i = 0; i < 5; i++)
     {
-        res |= !strncmp(match_str, specials[i], strlen(specials[i]));
+        res |= strlen(specials[i]) == strlen(match_str) && !strncmp(match_str, specials[i], strlen(specials[i]));
     }
-    return !res && match_str == NULL;
+    return res || (match_str == NULL);
 }
 
 int is_argv_valid(char* argv[])
@@ -108,33 +108,34 @@ int is_argv_valid(char* argv[])
     if (argv_contains(argv, "cd") != -1
         && (argc != 2 || is_keyword(argv[1])))
     {
-        fprintf(stderr, "Bad argument for cd");
+        fprintf(stderr, "Bad argument for cd\n");
         return 0;
     }
     if ((position = argv_contains(argv, "&")) != -1
-        && position != argc - 1)
+        && (position != argc - 1 || argc == 1))
     {
-        fprintf(stderr, "Incorrect '&' position");
+        fprintf(stderr, "Incorrect '&' position\n");
         return 0;
     }
-    else
-    {
-        is_daemon = (position == argc - 1);
-    }
+    is_daemon = (position == argc - 1);
 
     if (argv_contains(argv, ">") != -1 && argv_contains(argv, ">>") != -1)
     {
-        fprintf(stderr, "Unclear redirection: mixed write/append");
+        fprintf(stderr, "Unclear redirection: mixed write/append\n");
         return 0;
     }
     for (i = 0; i < 3; i++)
     {
         if (argv_count_entries(argv, redirect_words[i]) > 1)
         {
-            fprintf(stderr, "Double stream redirection");
+            fprintf(stderr, "Double stream redirection\n");
             return 0;
         }
         position = argv_contains(argv, redirect_words[i]);
+        if (position == -1)
+        {
+            continue;
+        }
         if (position == 0
             || !(position == argc - 2 - is_daemon
                  || (position + 2 < argc - is_daemon
@@ -142,15 +143,14 @@ int is_argv_valid(char* argv[])
                          || argv[position + 2]
                              == redirect_words[(i + 2) % 3]))))
         {
-            fprintf(stderr, "Invalid redirect keyword position");
+            fprintf(stderr, "Invalid redirect keyword position\n");
             return 0;
         }
         if (is_keyword(argv[position + 1]))
         {
-            fprintf(stderr, "Filename is empty or is a keyword");
+            fprintf(stderr, "Filename is empty or is a keyword\n");
             return 0;
         }
     }
-
     return 1;
 }

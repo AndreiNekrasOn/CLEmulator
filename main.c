@@ -31,6 +31,7 @@ enum separator_type
     redirect_stdout_a
 };
 
+/* action on signal SIGCHLD */
 void remove_zombies(int n)
 {
     while (waitpid(-1, NULL, WNOHANG) > 0)
@@ -309,6 +310,7 @@ int main(int argc, char* argv[])
         if (command == NULL)
             continue;
         cmd_argv = list_to_argv(&command);
+        if (is_argv_valid(cmd_argv))
         perform_command(cmd_argv);
         free_argv(cmd_argv);
     }
