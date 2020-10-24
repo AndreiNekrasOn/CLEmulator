@@ -139,9 +139,8 @@ int is_argv_valid(char* argv[])
         if (position == 0
             || !(position == argc - 2 - is_daemon
                  || (position + 2 < argc - is_daemon
-                     && (argv[position + 2] == redirect_words[(i + 1) % 3]
-                         || argv[position + 2]
-                             == redirect_words[(i + 2) % 3]))))
+                     && (strcmp(argv[position + 2], redirect_words[(i + 1) % 3])
+                         || strcmp(argv[position + 2], redirect_words[(i + 2) % 3])))))
         {
             fprintf(stderr, "Invalid redirect keyword position\n");
             return 0;
