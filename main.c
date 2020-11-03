@@ -228,7 +228,10 @@ int perform_redirect(char* filename, int strem_fd, int flags)
     }
     fd = open(filename, flags, 0666);
     if (fd == -1)
+    {
+        perror(filename);
         return -1;
+    }
     dup2(fd, strem_fd);
     close(fd);
     return 0;
@@ -308,18 +311,9 @@ void perform_command(char* argv[])
     if (is_argv_valid(argv))
     {
         daemon_flag = is_daemon(argv);
-        /* retrieve_from_argv(argv, "&");
-           // need to find a way to separate & and > >> < commands from
-           others
-           // maybe something like argv_cut(char* argv[], int position_to)
-           - everything after position two is retrieved...
-           // but only after figuring input/output streams/files
-           (name==NULL => standard)
-           // and after figuring daemon / non daemon
-        */
         num_pipes = count_pipes(argv);
         piped = pipe_split_argv(argv);
-        print_piped_argv(piped, num_pipes);
+        /* print_piped_argv(piped, num_pipes); */
         if (num_pipes == 1)
             perform_single_command(piped[0], daemon_flag);
         else if (is_piped_valid(piped, num_pipes))
