@@ -239,12 +239,11 @@ int get_unpiped_daemon(char* argv[])
     return argv_contains(argv, "&") != -1;
 }
 
-char* get_unpiped_redirect_filename(char* argv[], char* token) {
+char* get_unpiped_redirect_filename(char* argv[], char* token)
+{
     int token_pos;
     token_pos = argv_contains(argv, token);
     if (token_pos == -1)
         return NULL;
     return argv[token_pos + 1];
 }
-
-

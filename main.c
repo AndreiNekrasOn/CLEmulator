@@ -27,12 +27,12 @@ enum separator_type
     space,
     daemon,
     redirect_stdout,
-    redirect_stdin,
     redirect_stdout_a,
+    redirect_stdin,
     pipe_line
 };
 
-typedef struct command_modifier 
+typedef struct command_modifier
 {
     int is_daemon;
     char* redirect_in;
@@ -40,7 +40,7 @@ typedef struct command_modifier
     int append; /* -1 if redirect_in == NULL ? */
 } command_modifier;
 
-command_modifier* get_command_modifier(char* argv[])
+command_modifier get_command_modifier(char* argv[])
 {
     command_modifier cm;
     cm.is_daemon = get_unpiped_daemon(argv);
@@ -49,31 +49,30 @@ command_modifier* get_command_modifier(char* argv[])
     cm.append = -1;
     if (cm.redirect_out == NULL)
     {
-        cm.redirect_out = get_unpiped_redirect_filename(">>");
+        cm.redirect_out = get_unpiped_redirect_filename(argv, ">>");
         cm.append = 1;
     }
     else
     {
         cm.append = 0;
     }
-    return &cm;
+    return cm;
 }
 
-/* tailrec */
 char** unjunk_command(char* argv[], list* separators)
 {
-    int nullable_idx;
-    if (separators == NULL)
-       return argv;
-    if (separators->word != "|")
-    {
-        nullable_idx = argv_contains(argv, separators->word);
-        if (nullable_idx != -1)
-            argv[nullable_idx] = NULL;
-        return unjunk_command(argv, separators->next);
-    }
-}
+    int i;
 
+    for (i = 0; argv[i] != NULL; i++)
+    {
+        if (strcmp(argv[i], "|") != 0 && list_has(separators, argv[i]))
+        {
+            free(argv[i]);
+            argv[i] = NULL;
+        }
+    }
+    return argv;
+}
 
 /* action on signal SIGCHLD */
 void remove_zombies(int n)
@@ -254,6 +253,7 @@ list* tokenize_string(const char* str, list* separators)
 }
 
 /* performing programm */
+
 int perform_redirect(char* filename, int strem_fd, int flags)
 {
     int fd;
@@ -273,23 +273,27 @@ int perform_redirect(char* filename, int strem_fd, int flags)
     return 0;
 }
 
-int check_and_perform_redirect(char* argv[])
+int check_and_perform_redirect(char* argv[], command_modifier cmd_mod)
 {
-    int token_idx;
     int success = 1;
-    if ((token_idx = retrieve_from_argv(argv, ">")) != -1)
-        success &= !perform_redirect(
-            argv[token_idx], 1, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
-    else if ((token_idx = retrieve_from_argv(argv, ">>")) != -1)
-        success &= !perform_redirect(argv[token_idx], 1,
-                                     O_WRONLY | O_APPEND | O_BINARY);
-    if (token_idx != -1)
-        remove_from_argv(argv, token_idx); /* remove filename */
-    if ((token_idx = retrieve_from_argv(argv, "<")) != -1)
+    if (cmd_mod.redirect_in != NULL)
     {
-        success
-            &= !perform_redirect(argv[token_idx], 0, O_RDONLY | O_BINARY);
-        remove_from_argv(argv, token_idx);
+        success &= !perform_redirect(cmd_mod.redirect_in, 0,
+                                     O_RDONLY | O_BINARY);
+    }
+    if (cmd_mod.redirect_out != NULL)
+    {
+        if (cmd_mod.append == 0)
+        {
+            success &= !perform_redirect(cmd_mod.redirect_out, 1,
+                                         O_WRONLY | O_CREAT | O_TRUNC
+                                             | O_BINARY);
+        }
+        else
+        {
+            success &= !perform_redirect(cmd_mod.redirect_out, 1,
+                                         O_WRONLY | O_APPEND | O_BINARY);
+        }
     }
     return success ? 0 : -1;
 }
@@ -307,7 +311,22 @@ void perform_cd_command(const char* dir)
         perror(dir);
 }
 
-void perform_single_command(char** argv, int daemon_flag)
+void perform_command_w_pid(char* argv[], int pid, command_modifier cmd_mod)
+{
+    if (!pid)
+    {
+        if (check_and_perform_redirect(argv, cmd_mod) == -1)
+        {
+            fprintf(stderr, "Cannot perform redirection\n");
+            exit(1);
+        }
+        execvp(argv[0], argv);
+        perror(argv[0]);
+        exit(1);
+    }
+}
+
+void perform_single_command(char** argv, command_modifier cmd_mod)
 {
     int pid;
     if (argv_contains(argv, "cd") == 0)
@@ -315,75 +334,155 @@ void perform_single_command(char** argv, int daemon_flag)
     else
     {
         pid = fork();
-        if (!pid)
-        {
-            if (daemon_flag)
-                argv[get_argc(argv) - 1] = NULL;
-            if (check_and_perform_redirect(argv) == -1)
-            {
-                fprintf(stderr, "Cannot perform redirection\n");
-                exit(1);
-            }
-            execvp(argv[0], argv);
-            perror(argv[0]);
-            exit(1);
-        }
-        if (!daemon_flag)
+        perform_command_w_pid(argv, pid, cmd_mod);
+        if (!cmd_mod.is_daemon)
             while (wait(NULL) != pid)
                 ;
     }
 }
 
-void perform_pipe(char*** piped, int daemon_flag)
+int is_any_child_alive(int* pids, int size)
 {
-    perform_single_command(piped[0], daemon_flag);
+    int i;
+    for (i = 0; i < size; i++)
+    {
+        if (pids[i] != -1)
+            return 1;
+    }
+    return 0;
+}
+
+void stay_dead_and_out_of_this_world(int* pids, int size, int chld_pid)
+{
+    int i;
+    for (i = 0; i < size; i++)
+    {
+        if (pids[i] == chld_pid)
+        {
+            pids[i] = -1;
+            return;
+        }
+    }
+}
+
+void perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
+{
+    int pids[2];
+    int fd[2];
+    pipe(fd);
+    if ((pids[0] = fork()) == 0) /* writes to pipe */
+    {
+        close(fd[0]);
+        dup2(fd[1], 1);
+        cmd_mod.redirect_out = NULL;
+        perform_command_w_pid(piped[0], pids[0], cmd_mod);
+        perror(piped[0][0]);
+        exit(1);
+    }
+    if ((pids[1] = fork()) == 0) /* reads from pipe */
+    {
+        close(fd[1]);
+        dup2(fd[0], 0);
+        cmd_mod.redirect_in = NULL;
+        perform_command_w_pid(piped[1], pids[1], cmd_mod);
+        perror(piped[1][0]);
+        exit(1);
+    }
+    close(fd[0]);
+    close(fd[1]);
+    if (cmd_mod.is_daemon)
+        while (is_any_child_alive(pids, 2))
+            stay_dead_and_out_of_this_world(pids, 2, wait(NULL));
+}
+
+void _perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
+{
+    int* pids;
+    int fd[2];
+    int saved_fd = -1, i;
+    pids = malloc(num_pipes * sizeof(*pids));
+
+    printf("numpipes=%d\n", num_pipes);
+    for (i = 0; i < num_pipes - 1; i++)
+    {
+        pipe(fd);
+
+        if ((pids[i] = fork()) == 0)
+        {
+            close(fd[0]);
+            if (i != 0)
+                dup2(saved_fd, 0);
+            dup2(fd[1], 1);
+            /*
+            if (i != 0) cmd_mod.redirect_in = NULL;
+            cmd_mod.redirect_out = NULL;
+            */
+            perform_command_w_pid(piped[i], pids[i], cmd_mod);
+            perror(piped[i][0]);
+            exit(1);
+        }
+        saved_fd = fd[0];
+    }
+    if ((pids[num_pipes - 1] = fork()) == 0)
+    {
+        close(fd[1]);
+        dup2(fd[0], 0);
+        /* cmd_mod.redirect_in = NULL; */
+        perform_command_w_pid(piped[num_pipes - 1], pids[num_pipes - 1],
+                              cmd_mod);
+        perror(piped[num_pipes - 1][0]);
+        exit(1);
+    }
+    if (cmd_mod.is_daemon)
+        while (is_any_child_alive(pids, num_pipes))
+            stay_dead_and_out_of_this_world(pids, num_pipes, wait(NULL));
 }
 
 /* assumes argv is valid */
-void perform_command(char* argv[])
+void perform_command(char* argv[], command_modifier cmd_mod)
 {
-
     char*** piped;
-    int num_pipes, daemon_flag;
-    daemon_flag = get_unpiped_daemon(argv);
+    int num_pipes;
     num_pipes = count_pipes(argv);
     piped = pipe_split_argv(argv);
-    print_piped_argv(piped, num_pipes);
     if (num_pipes == 1)
-        perform_single_command(piped[0], daemon_flag);
+        perform_single_command(piped[0], cmd_mod);
     else if (is_piped_valid(piped, num_pipes))
-        perform_pipe(piped, daemon_flag);
-    free_piped_argv(piped, num_pipes);
+        perform_pipe(piped, num_pipes, cmd_mod);
+    free(piped);
+}
+
+void process_input(char* input, list* separators)
+{
+    list* command;
+    char** cmd_argv;
+    command_modifier modifier;
+    command = tokenize_string(input, separators);
+    cmd_argv = list_to_argv(&command);
+    if (is_argv_valid(cmd_argv))
+    {
+        modifier = get_command_modifier(cmd_argv);
+        cmd_argv = unjunk_command(cmd_argv, separators);
+        perform_command(cmd_argv, modifier);
+    }
+    free_argv(cmd_argv);
 }
 
 /* main method */
 int main(int argc, char* argv[])
 {
-    list* command;
     char* user_input;
     list* separators;
-    char** cmd_argv; /* debug */
-    command_modifier* cmd_cm;
     signal(SIGCHLD, remove_zombies);
     separators = tokenize_string(">> > < & |", NULL);
     while (!feof(stdin))
     {
         printf("::$ ");
         user_input = scan_command();
-        command = tokenize_string(user_input, separators);
+        process_input(user_input, separators);
         free(user_input);
-
-        cmd_argv = list_to_argv(&command);
-
-        
-        if (is_argv_valid(argv))
-        {
-            perform_command(cmd_argv);
-        }
-        free(cmd_argv);
     }
     puts("\n-----");
     list_free_no_words(separators);
     return 0;
 }
-

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -Wall -Werror -ansi -pedantic
+CFLAGS = -g -Wall -ansi -pedantic
 SRCMODULS = list.c argv_processing.c
 OBJMODULS = $(SRCMODULS:.c=.o)
 EXECUTABLE = clemulator.out

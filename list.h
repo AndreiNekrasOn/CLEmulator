@@ -14,4 +14,5 @@ void list_free_no_words(list* head);
 int _list_size_tailrec(list* head, int acc);
 int list_size(list* head);
 list* list_insert(list* tail);
+int list_has(list* head, char* value);
 #endif

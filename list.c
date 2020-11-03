@@ -1,6 +1,7 @@
 #include "list.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 list* list_init()
 {
@@ -59,4 +60,13 @@ list* list_insert(list* tail)
     if (tail != NULL)
         tail->next = child;
     return child;
+}
+
+int list_has(list* head, char* value)
+{
+    if (head == NULL)
+        return 0;
+    if (strcmp(head->word, value) == 0)
+        return 1;
+    return list_has(head->next, value);
 }
