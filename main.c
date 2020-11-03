@@ -32,6 +32,49 @@ enum separator_type
     pipe_line
 };
 
+typedef struct command_modifier 
+{
+    int is_daemon;
+    char* redirect_in;
+    char* redirect_out;
+    int append; /* -1 if redirect_in == NULL ? */
+} command_modifier;
+
+command_modifier* get_command_modifier(char* argv[])
+{
+    command_modifier cm;
+    cm.is_daemon = get_unpiped_daemon(argv);
+    cm.redirect_in = get_unpiped_redirect_filename(argv, "<");
+    cm.redirect_out = get_unpiped_redirect_filename(argv, ">");
+    cm.append = -1;
+    if (cm.redirect_out == NULL)
+    {
+        cm.redirect_out = get_unpiped_redirect_filename(">>");
+        cm.append = 1;
+    }
+    else
+    {
+        cm.append = 0;
+    }
+    return &cm;
+}
+
+/* tailrec */
+char** unjunk_command(char* argv[], list* separators)
+{
+    int nullable_idx;
+    if (separators == NULL)
+       return argv;
+    if (separators->word != "|")
+    {
+        nullable_idx = argv_contains(argv, separators->word);
+        if (nullable_idx != -1)
+            argv[nullable_idx] = NULL;
+        return unjunk_command(argv, separators->next);
+    }
+}
+
+
 /* action on signal SIGCHLD */
 void remove_zombies(int n)
 {
@@ -211,13 +254,6 @@ list* tokenize_string(const char* str, list* separators)
 }
 
 /* performing programm */
-int is_daemon(char** argv)
-{
-    int argc;
-    argc = get_argc(argv);
-    return argc > 1 && argv_contains(argv, "&") == argc - 1;
-}
-
 int perform_redirect(char* filename, int strem_fd, int flags)
 {
     int fd;
@@ -303,25 +339,21 @@ void perform_pipe(char*** piped, int daemon_flag)
     perform_single_command(piped[0], daemon_flag);
 }
 
+/* assumes argv is valid */
 void perform_command(char* argv[])
 {
 
     char*** piped;
     int num_pipes, daemon_flag;
-    if (is_argv_valid(argv))
-    {
-        daemon_flag = is_daemon(argv);
-        num_pipes = count_pipes(argv);
-        piped = pipe_split_argv(argv);
-        /* print_piped_argv(piped, num_pipes); */
-        if (num_pipes == 1)
-            perform_single_command(piped[0], daemon_flag);
-        else if (is_piped_valid(piped, num_pipes))
-            perform_pipe(piped, daemon_flag);
-        free_piped_argv(piped, num_pipes);
-    }
-    else
-        free_argv(argv);
+    daemon_flag = get_unpiped_daemon(argv);
+    num_pipes = count_pipes(argv);
+    piped = pipe_split_argv(argv);
+    print_piped_argv(piped, num_pipes);
+    if (num_pipes == 1)
+        perform_single_command(piped[0], daemon_flag);
+    else if (is_piped_valid(piped, num_pipes))
+        perform_pipe(piped, daemon_flag);
+    free_piped_argv(piped, num_pipes);
 }
 
 /* main method */
@@ -330,6 +362,8 @@ int main(int argc, char* argv[])
     list* command;
     char* user_input;
     list* separators;
+    char** cmd_argv; /* debug */
+    command_modifier* cmd_cm;
     signal(SIGCHLD, remove_zombies);
     separators = tokenize_string(">> > < & |", NULL);
     while (!feof(stdin))
@@ -338,9 +372,18 @@ int main(int argc, char* argv[])
         user_input = scan_command();
         command = tokenize_string(user_input, separators);
         free(user_input);
-        perform_command(list_to_argv(&command));
+
+        cmd_argv = list_to_argv(&command);
+
+        
+        if (is_argv_valid(argv))
+        {
+            perform_command(cmd_argv);
+        }
+        free(cmd_argv);
     }
     puts("\n-----");
     list_free_no_words(separators);
     return 0;
 }
+

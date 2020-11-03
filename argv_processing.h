@@ -17,5 +17,7 @@ int count_pipes(char* argv[]);
 char*** pipe_split_argv(char* argv[]);
 void free_piped_argv(char*** piped_argv, int num_pipes);
 void print_piped_argv(char*** piped_argv, int num_pipes);
+int get_unpiped_daemon(char* argv[]);
+char* get_unpiped_redirect_filename(char* argv[]);
 
 #endif
