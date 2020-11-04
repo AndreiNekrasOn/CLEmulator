@@ -1,4 +1,5 @@
 #include "list.h"
+#include "argv_util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -246,4 +247,33 @@ char* get_unpiped_redirect_filename(char* argv[], char* token)
     if (token_pos == -1)
         return NULL;
     return argv[token_pos + 1];
+}
+
+command_modifier get_command_modifier(char* argv[])
+{
+    command_modifier cm;
+    cm.is_daemon = get_unpiped_daemon(argv);
+    cm.redirect_in = get_unpiped_redirect_filename(argv, "<");
+    cm.redirect_out = get_unpiped_redirect_filename(argv, ">");
+    cm.append = 0;
+    if (cm.redirect_out == NULL)
+    {
+        cm.redirect_out = get_unpiped_redirect_filename(argv, ">>");
+        cm.append = 1;
+    }
+    return cm;
+}
+
+char** unjunk_command(char* argv[], list* separators)
+{
+    int i;
+    for (i = 0; argv[i] != NULL; i++)
+    {
+        if (strcmp(argv[i], "|") != 0 && list_has(separators, argv[i]))
+        {
+            free(argv[i]);
+            argv[i] = NULL;
+        }
+    }
+    return argv;
 }

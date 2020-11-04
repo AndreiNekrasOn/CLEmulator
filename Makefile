@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -g -Wall -ansi -pedantic
-SRCMODULS = list.c argv_processing.c
+CFLAGS = -g -Wall -ansi -pedantic -DDEBUG=1
+SRCMODULS = list.c argv_util.c process_util.c string_util.c parser.c
 OBJMODULS = $(SRCMODULS:.c=.o)
 EXECUTABLE = clemulator.out
 
