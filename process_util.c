@@ -127,9 +127,8 @@ void perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
 {
     int* pids;
     int fd[2];
-    int saved_fd = -1, i, first_saved = -1;;
+    int saved_fd = -1, i;;
     pids = malloc(num_pipes * sizeof(*pids));
-
     for (i = 0; i < num_pipes - 1; i++)
     {
         pipe(fd);
@@ -146,8 +145,8 @@ void perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
             perror(piped[i][0]);
             exit(1);
         }
+        if (saved_fd != -1) close(saved_fd);
         saved_fd = fd[0];
-        if (first_saved == -1) first_saved = saved_fd;
         close(fd[1]);
     }
     if ((pids[num_pipes - 1] = fork()) == 0)
@@ -162,7 +161,6 @@ void perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
     }
     close(fd[0]);
     close(fd[1]);
-    close(saved_fd);
     close(saved_fd);
     if (!cmd_mod.is_daemon)
     {
