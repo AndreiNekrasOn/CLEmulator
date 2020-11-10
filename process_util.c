@@ -127,17 +127,19 @@ void perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
 {
     int* pids;
     int fd[2];
-    int saved_fd = -1, i;;
+    int saved_fd = -1, i;
     pids = malloc(num_pipes * sizeof(*pids));
     for (i = 0; i < num_pipes - 1; i++)
     {
         pipe(fd);
         if ((pids[i] = fork()) == 0)
         {
+            cmd_mod.redirect_out = NULL;
             close(fd[0]);
             if (i != 0)
             {
                 dup2(saved_fd, 0);
+                close(saved_fd);
                 cmd_mod.redirect_in = NULL;
             }
             dup2(fd[1], 1);
@@ -145,7 +147,10 @@ void perform_pipe(char*** piped, int num_pipes, command_modifier cmd_mod)
             perror(piped[i][0]);
             exit(1);
         }
-        if (saved_fd != -1) close(saved_fd);
+        if (saved_fd != -1)
+        {
+            close(saved_fd);
+        }
         saved_fd = fd[0];
         close(fd[1]);
     }
